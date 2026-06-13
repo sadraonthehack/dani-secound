@@ -136,8 +136,7 @@ async def check_owner(event):
     sender = await event.get_sender()
     if sender and sender.username and sender.username in OWNERS["usernames"]:
         return True
-    
-     False
+    return False
 
 # UPDATED HELP COMMAND WITH YOUR CHANNEL PROMO
 @events.register(events.NewMessage(pattern=re.compile(r'^/help$', re.IGNORECASE)))
