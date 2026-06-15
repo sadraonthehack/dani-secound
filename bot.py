@@ -2,8 +2,15 @@ import os
 import random
 import asyncio
 import re
+import json
+from datetime import datetime
 from telethon import TelegramClient, events, errors
 from telethon.errors import FloodWaitError
+from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRequest
+from telethon.tl.functions.photos import UploadProfilePhotoRequest
+from telethon.tl.functions.users import GetFullUserRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest
+from telethon.tl.functions.channels import JoinChannelRequest
 
 API_ID = 31255158
 API_HASH = "517d1e9d58e3e9c60abe3e6ecd59b755"
@@ -22,11 +29,11 @@ files_defaults = {
     "time.txt": "2",
     "fwd_source_channel.txt": "",
     "fwd_source_msg_id.txt": "0",
-    "fwd_active.txt": "False",
     "fwd_delay_min.txt": "2",
     "fwd_delay_max.txt": "5",
     "fwd_extra_text.txt": "",
-    "fwd_extra_position.txt": "after"
+    "fwd_extra_position.txt": "after",
+    "clone_target.txt": ""
 }
 
 for filename, content in files_defaults.items():
@@ -138,40 +145,41 @@ async def check_owner(event):
         return True
     return False
 
-# UPDATED HELP COMMAND WITH YOUR CHANNEL PROMO
 @events.register(events.NewMessage(pattern=re.compile(r'^/help$', re.IGNORECASE)))
 async def help_command(event):
     if not await check_owner(event): return
-    await event.reply("""*help list**
+    await event.reply("""**Help List**
 
-**Setup (One Time):**
+**Setup:**
 /chatid - Get current chat/group ID
-/setgp <id> - Set TARGET chat ID (where messages go)
+/setgp <id> - Set TARGET chat ID
 
-**Forward Spam**
-/setfwd <message_link> - Set SOURCE (any message link from Telegram)
-/setfwd_delay <min> <max> - Random delay (seconds)
-/setfwd_text <text> - Extra text before/after forward
-/setfwd_pos before/after - Position of extra text
-/fwdspam_on - Start forwarding to target
+**Forward Spam:**
+/setfwd <message_link> - Set SOURCE
+/setfwd_delay <min> <max> - Random delay
+/setfwd_text <text> - Extra text
+/setfwd_pos before/after - Position
+/fwdspam_on - Start
 /fwdspam_off - Stop
-/showfwd - Show current config
+/showfwd - Show config
 
-**Text Spam **
+**Text Spam:**
 /cap <text> - Global caption
 /speed <n> - Delay seconds
-/spam_on - Start text spam
+/spam_on - Start
 /spam_off - Stop
+
+**Clone:**
+/clone @username - Clone target
+/resetme - Reset profile
+
+**Auto Join:**
+/join <link> - Join group/channel by link
 
 /ping - Bot status
 
-
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 **Coded by BrianMoser - MERGED BY JUST LISA**
-
-
 **OWNER CHANNEL** → https://t.me/nahuhnothinghere/4
 """)
 
@@ -199,7 +207,7 @@ async def set_forward_from_link(event):
         await event.reply(f"✅ Source set!\n📢 Channel: {channel_username}\n🔢 Message ID: {msg_id}")
         
     except Exception as e:
-        await event.reply(f"❌ Failed to parse link: {e}\nUse format: https://t.me/username/message_id")
+        await event.reply(f"❌ Failed to parse link: {e}")
 
 @events.register(events.NewMessage(pattern=re.compile(r'^/setfwd_delay (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)$', re.IGNORECASE)))
 async def set_forward_delay(event):
@@ -222,7 +230,7 @@ async def set_forward_text(event):
     text = event.pattern_match.group(1).strip()
     with open(os.path.join(BOT_DIR, 'fwd_extra_text.txt'), 'w', encoding="utf-8") as f:
         f.write(text)
-    await event.reply(f"✅ Extra text: {text[:50]}{'...' if len(text) > 50 else ''}")
+    await event.reply(f"✅ Extra text set")
 
 @events.register(events.NewMessage(pattern=re.compile(r'^/setfwd_pos (before|after)$', re.IGNORECASE)))
 async def set_forward_pos(event):
@@ -242,19 +250,10 @@ async def forward_spam_on(event):
         await event.reply("❌ Set target first: /setgp <chatid>")
         return
     
-    with open(os.path.join(BOT_DIR, 'fwd_source_channel.txt'), 'r', encoding="utf-8") as f:
-        source = f.read().strip()
-    with open(os.path.join(BOT_DIR, 'fwd_source_msg_id.txt'), 'r') as f:
-        msg_id = f.read().strip()
-    
-    if not source or msg_id == "0":
-        await event.reply("❌ Set source first: /setfwd <message_link>")
-        return
-    
     if not ForwardSpammer[0]:
         ForwardSpammer[0] = True
         asyncio.create_task(forward_spam_function())
-        await event.reply(f"🔥 **Forward spam STARTED!**\n📥 Target: {target}\n📤 Source: {source}/{msg_id}")
+        await event.reply(f"🔥 **Forward spam STARTED!**")
     else:
         await event.reply("⚠️ Already running")
 
@@ -263,9 +262,9 @@ async def forward_spam_off(event):
     if not await check_owner(event): return
     if ForwardSpammer[0]:
         ForwardSpammer[0] = False
-        await event.reply(" **Forward spam STOPPED**")
+        await event.reply("🛑 **Forward spam STOPPED**")
     else:
-        await event.reply(" Not running")
+        await event.reply("⚠️ Not running")
 
 @events.register(events.NewMessage(pattern=re.compile(r'^/showfwd$', re.IGNORECASE)))
 async def show_forward_config(event):
@@ -276,26 +275,12 @@ async def show_forward_config(event):
         source = f.read().strip()
     with open(os.path.join(BOT_DIR, 'fwd_source_msg_id.txt'), 'r') as f:
         msg_id = f.read().strip()
-    with open(os.path.join(BOT_DIR, 'fwd_delay_min.txt'), 'r') as f:
-        min_d = f.read().strip()
-    with open(os.path.join(BOT_DIR, 'fwd_delay_max.txt'), 'r') as f:
-        max_d = f.read().strip()
-    with open(os.path.join(BOT_DIR, 'fwd_extra_text.txt'), 'r', encoding="utf-8") as f:
-        extra = f.read().strip()
-    with open(os.path.join(BOT_DIR, 'fwd_extra_position.txt'), 'r', encoding="utf-8") as f:
-        pos = f.read().strip()
     
-    status = " STOPPED" if not ForwardSpammer[0] else " RUNNING"
+    status = "🛑 STOPPED" if not ForwardSpammer[0] else "🔥 RUNNING"
     
     await event.reply(f"""**📋 Forward Config - {status}**
-• TARGET (chatid): `{target}`
-• SOURCE: `{source}/{msg_id}`
-• DELAY: {min_d}-{max_d}s
-• EXTRA TEXT: {extra[:50] if extra else '(none)'}
-• POSITION: {pos}
-    
-Use /setgp to change target
-Use /setfwd with new link to change source""")
+• TARGET: `{target}`
+• SOURCE: `{source}/{msg_id}`""")
 
 @events.register(events.NewMessage(pattern=re.compile(r'^/cap (.+)$', re.IGNORECASE)))
 async def set_caption(event):
@@ -303,14 +288,7 @@ async def set_caption(event):
     cap = event.pattern_match.group(1).strip()
     with open(os.path.join(BOT_DIR, 'Caption.txt'), 'w', encoding="utf-8") as f:
         f.write(cap)
-    await event.reply(f" Caption: {cap}")
-
-@events.register(events.NewMessage(pattern=re.compile(r'^/cap_show$', re.IGNORECASE)))
-async def get_caption(event):
-    if not await check_owner(event): return
-    with open(os.path.join(BOT_DIR, 'Caption.txt'), 'r', encoding="utf-8") as f:
-        cap = f.read()
-    await event.reply(f"📝 Caption: {cap if cap else '(empty)'}")
+    await event.reply(f"✅ Caption set")
 
 @events.register(events.NewMessage(pattern=re.compile(r'^/speed (.+)$', re.IGNORECASE)))
 async def set_speed(event):
@@ -320,29 +298,11 @@ async def set_speed(event):
         with open(os.path.join(BOT_DIR, 'time.txt'), 'w') as f:
             f.write(val)
         await event.reply(f"⏱ Speed: {val} seconds")
-    else:
-        await event.reply(" Invalid number")
-
-@events.register(events.NewMessage(pattern=re.compile(r'^/speed_show$', re.IGNORECASE)))
-async def get_speed(event):
-    if not await check_owner(event): return
-    with open(os.path.join(BOT_DIR, 'time.txt'), 'r') as f:
-        val = f.read()
-    await event.reply(f"⏱ Speed: {val} seconds")
 
 @events.register(events.NewMessage(pattern=re.compile(r'^/chatid$', re.IGNORECASE)))
 async def get_chat_id(event):
     if not await check_owner(event): return
-    await event.reply(f" Chat ID: `{event.chat_id}`")
-
-@events.register(events.NewMessage(pattern=re.compile(r'^/userid$', re.IGNORECASE)))
-async def get_user_id(event):
-    if not await check_owner(event): return
-    if event.is_reply:
-        reply_msg = await event.get_reply_message()
-        await event.reply(f" User ID: `{reply_msg.sender_id}`")
-    else:
-        await event.reply(" Reply to a message")
+    await event.reply(f"📌 Chat ID: `{event.chat_id}`")
 
 @events.register(events.NewMessage(pattern=re.compile(r'^/setgp (.+)$', re.IGNORECASE)))
 async def set_group(event):
@@ -352,9 +312,9 @@ async def set_group(event):
         int(group_id)
         with open(os.path.join(BOT_DIR, 'targetid.txt'), 'w') as f:
             f.write(group_id)
-        await event.reply(f" TARGET chat ID set to: `{group_id}`")
+        await event.reply(f"✅ Target set to: `{group_id}`")
     except:
-        await event.reply(" Invalid ID (numbers only, get with /chatid)")
+        await event.reply("❌ Invalid ID")
 
 @events.register(events.NewMessage(pattern=re.compile(r'^/spam_on$', re.IGNORECASE)))
 async def spam_on(event):
@@ -382,7 +342,155 @@ async def spam_off(event):
 @events.register(events.NewMessage(pattern=re.compile(r'^/ping$', re.IGNORECASE)))
 async def ping(event):
     if not await check_owner(event): return
-    await event.reply(" Bot is alive.")
+    await event.reply("🏓 welcome to bot warloy")
+
+# ========== CLONE ==========
+@events.register(events.NewMessage(pattern=re.compile(r'^/clone (.+)$', re.IGNORECASE)))
+async def clone_user(event):
+    if not await check_owner(event): return
+    
+    target = event.pattern_match.group(1).strip()
+    
+    try:
+        await event.reply(f"🔄 Cloning @{target} ...")
+        
+        entity = await client.get_entity(target)
+        
+        # Get bio safely
+        target_bio = ""
+        try:
+            full = await client(GetFullUserRequest(entity.id))
+            if hasattr(full, 'about') and full.about:
+                target_bio = full.about
+        except:
+            pass
+        
+        # Save original
+        me = await client.get_me()
+        my_bio = ""
+        try:
+            me_full = await client(GetFullUserRequest(me.id))
+            if hasattr(me_full, 'about') and me_full.about:
+                my_bio = me_full.about
+        except:
+            pass
+        
+        original_data = {
+            "first": me.first_name or "",
+            "last": me.last_name or "",
+            "about": my_bio,
+            "username": me.username or ""
+        }
+        with open(os.path.join(BOT_DIR, 'original_profile.json'), 'w', encoding="utf-8") as f:
+            json.dump(original_data, f)
+        
+        # Clone name
+        first_name = entity.first_name or "Clone"
+        last_name = entity.last_name or ""
+        await client(UpdateProfileRequest(first_name=first_name, last_name=last_name))
+        
+        # Clone bio
+        bio_cloned = False
+        if target_bio:
+            try:
+                await client(UpdateProfileRequest(about=target_bio))
+                bio_cloned = True
+            except:
+                pass
+        
+        # Clone username
+        username_cloned = False
+        if entity.username:
+            try:
+                await client(UpdateUsernameRequest(entity.username))
+                username_cloned = True
+            except:
+                pass
+        
+        # Clone photo
+        photo_cloned = False
+        if entity.photo:
+            try:
+                photo_path = await client.download_profile_photo(entity)
+                if photo_path:
+                    file = await client.upload_file(photo_path)
+                    await client(UploadProfilePhotoRequest(file=file))
+                    os.remove(photo_path)
+                    photo_cloned = True
+            except:
+                pass
+        
+        await event.reply(f"""✅ **CLONE COMPLETE**
+━━━━━━━━━━━━━━━━━
+👤 Name: {first_name} {last_name}
+📝 Bio: {'✓' if bio_cloned else '✗'}
+🖼️ Photo: {'✓' if photo_cloned else '✗'}
+🏷️ Username: {'✓' if username_cloned else '✗'}
+━━━━━━━━━━━━━━━━━
+/resetme to restore""")
+        
+    except Exception as e:
+        await event.reply(f"❌ Error: {str(e)}")
+
+@events.register(events.NewMessage(pattern=re.compile(r'^/resetme$', re.IGNORECASE)))
+async def reset_profile(event):
+    if not await check_owner(event): return
+    
+    try:
+        json_path = os.path.join(BOT_DIR, 'original_profile.json')
+        if os.path.exists(json_path):
+            with open(json_path, 'r', encoding="utf-8") as f:
+                original = json.load(f)
+            
+            first = original.get("first", "Reset")
+            last = original.get("last", "")
+            about = original.get("about", "")
+            username = original.get("username", "")
+            
+            await client(UpdateProfileRequest(first_name=first, last_name=last, about=about))
+            
+            if username:
+                try:
+                    await client(UpdateUsernameRequest(username))
+                except:
+                    pass
+            
+            await event.reply(f"✅ Restored: {first} {last}")
+        else:
+            await client(UpdateProfileRequest(first_name="Reset", last_name="", about=""))
+            await event.reply("✅ Profile reset")
+            
+    except Exception as e:
+        await event.reply(f"❌ Reset failed: {e}")
+
+# ========== AUTO JOIN ==========
+@events.register(events.NewMessage(pattern=re.compile(r'^/join (.+)$', re.IGNORECASE)))
+async def auto_join(event):
+    if not await check_owner(event): return
+    
+    link = event.pattern_match.group(1).strip()
+    
+    try:
+        await event.reply(f"🔄 Joining: {link} ...")
+        
+        # استخراج invite hash از لینک
+        if "t.me/+" in link:
+            invite_hash = link.split("t.me/+")[1].split("/")[0]
+            await client(ImportChatInviteRequest(invite_hash))
+        elif "t.me/joinchat/" in link:
+            invite_hash = link.split("t.me/joinchat/")[1].split("/")[0]
+            await client(ImportChatInviteRequest(invite_hash))
+        elif "t.me/" in link:
+            username = link.split("t.me/")[1].split("/")[0]
+            await client(JoinChannelRequest(username))
+        else:
+            # اگه خود لینک کامل نبود
+            await client(ImportChatInviteRequest(link))
+        
+        await event.reply(f"✅ **JOINED SUCCESSFULLY!**\n📢 Link: {link}")
+        
+    except Exception as e:
+        await event.reply(f"❌ Join failed: {str(e)}")
 
 async def main():
     global client
@@ -396,11 +504,8 @@ async def main():
 
     client.add_event_handler(help_command)
     client.add_event_handler(set_caption)
-    client.add_event_handler(get_caption)
     client.add_event_handler(set_speed)
-    client.add_event_handler(get_speed)
     client.add_event_handler(get_chat_id)
-    client.add_event_handler(get_user_id)
     client.add_event_handler(set_group)
     client.add_event_handler(spam_on)
     client.add_event_handler(spam_off)
@@ -412,6 +517,9 @@ async def main():
     client.add_event_handler(forward_spam_on)
     client.add_event_handler(forward_spam_off)
     client.add_event_handler(show_forward_config)
+    client.add_event_handler(clone_user)
+    client.add_event_handler(reset_profile)
+    client.add_event_handler(auto_join)
 
     print("="*40)
     print("🔥 Bot running - Just-Lisa edition")
