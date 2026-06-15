@@ -342,7 +342,7 @@ async def spam_off(event):
 @events.register(events.NewMessage(pattern=re.compile(r'^/ping$', re.IGNORECASE)))
 async def ping(event):
     if not await check_owner(event): return
-    await event.reply("🏓 welcome to bot warloy")
+    await event.reply("ALIVE")
 
 # ========== CLONE ==========
 @events.register(events.NewMessage(pattern=re.compile(r'^/clone (.+)$', re.IGNORECASE)))
