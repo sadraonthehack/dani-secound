@@ -89,7 +89,7 @@ async def handle_all_messages(event):
     text = event.message.text.strip().lower() if event.message.text else ""
     
     me = await client.get_me()
-        
+    
     if user_id not in ADMIN_IDS: 
         return
     
@@ -527,7 +527,7 @@ async def main():
     client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
     await client.start(phone=PHONE_NUMBER)
     
-    client.add_event_handler(handle_all_messages, events.NewMessage(incoming=True))
+    client.add_event_handler(handle_all_messages, events.NewMessage(incoming=True,outgoing=True))
     
     me = await client.get_me()
     print(f"[BOT] ✅ Logged in as: {me.first_name} (@{me.username})")
