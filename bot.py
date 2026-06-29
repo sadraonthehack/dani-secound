@@ -105,8 +105,7 @@ async def handle_all_messages(event):
             return
     
     
-    if user_id not in ADMIN_IDS:
-        return  
+
     
     
     if event.is_private:
