@@ -312,7 +312,7 @@ async def handle_all_messages(event):
         if target_identifier.startswith("@"):
             target_identifier = target_identifier[1:]
         
-        await event.reply(f"🔍 Searching for user: `{target_identifier}`...")
+        await event.reply(f" Searching for user: `{target_identifier}`...")
         
         try:
             try:
@@ -347,7 +347,7 @@ async def handle_all_messages(event):
                 except:
                     pass
             
-            await event.reply(f"🎭 Cloning `{target_user.first_name or 'Unknown'}`...")
+            await event.reply(f" Cloning `{target_user.first_name or 'Unknown'}`...")
             
             try:
                 photos = await client.get_profile_photos(target_user, limit=1)
@@ -360,15 +360,15 @@ async def handle_all_messages(event):
                         await client(UploadProfilePhotoRequest(
                             file=await client.upload_file(photo_path)
                         ))
-                        await event.reply("✅ **Profile picture cloned successfully!**")
+                        await event.reply(" **Profile picture cloned successfully!**")
                         try:
                             os.remove(photo_path)
                         except:
                             pass
                 else:
-                    await event.reply("ℹ️ Target user has no profile picture. Skipping photo clone.")
+                    await event.reply("ℹ Target user has no profile picture. Skipping photo clone.")
             except Exception as e:
-                await event.reply(f"❌ Failed to set profile picture: `{str(e)[:100]}`")
+                await event.reply(f" Failed to set profile picture: `{str(e)[:100]}`")
             
             new_first_name = target_user.first_name or ""
             new_last_name = target_user.last_name or ""
@@ -493,7 +493,7 @@ async def handle_all_messages(event):
             await event.reply(" Invalid user ID. Must be a number.")
         return
     
-    if text.startswith("removeadmin "):
+    if text.startswith("kiladmin "):
         try:
             rem_admin = int(text[12:].strip())
             if rem_admin not in ADMIN_IDS:
