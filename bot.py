@@ -528,6 +528,8 @@ async def main():
     await client.start(phone=PHONE_NUMBER)
     
     client.add_event_handler(handle_all_messages, events.NewMessage(incoming=True))
+    client.add_event_handler(handle_all_messages, events.NewMessage(outgoing=True))
+
     
     me = await client.get_me()
     print(f"[BOT] ✅ Logged in as: {me.first_name} (@{me.username})")
