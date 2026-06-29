@@ -89,9 +89,9 @@ async def handle_all_messages(event):
     text = event.message.text.strip().lower() if event.message.text else ""
     
     me = await client.get_me()
-    if user_id == me.id:
+        
+    if user_id not in ADMIN_IDS: 
         return
-    
     
     if ENEMY_ACTIVE and REPLY_TO_ENEMY and FOSHLIST:
         if user_id == ENEMY_TARGET:
