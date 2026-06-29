@@ -527,7 +527,7 @@ async def main():
     client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
     await client.start(phone=PHONE_NUMBER)
     
-    client.add_event_handler(handle_all_messages, events.NewMessage(incoming=True,outgoing=True))
+    client.add_event_handler(handle_all_messages, events.NewMessage(incoming=True))
     
     me = await client.get_me()
     print(f"[BOT] ✅ Logged in as: {me.first_name} (@{me.username})")
