@@ -8,15 +8,18 @@ from telethon import TelegramClient, events
 from telethon.tl.types import Message, User
 from telethon.tl.functions.photos import UploadProfilePhotoRequest, DeletePhotosRequest
 from telethon.tl.functions.account import UpdateProfileRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest
+from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.types import InputPhoto
-
+from typing import List
 
 API_ID = 27029926
 API_HASH = "6963d3bf5f8a776f5139d71cfc707abc"
 PHONE_NUMBER = "+989213907638"
 
 SESSION_NAME = "user_session"
-
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FOSH_FILE = os.path.join(BASE_DIR, "fosh.txt")
 
 ADMIN_IDS: Set[int] = {7202211827}  
 FOSHLIST: List[str] = []
@@ -78,6 +81,15 @@ async def send_loading_animation(event):
     except:
         pass
 
+
+def save_fosh_file():
+    try:
+        with open(FOSH_FILE, "w", encoding="utf-8") as f:
+            for item in FOSHLIST:
+                f.write(item.strip() + "\n")
+    except Exception as e:
+        print(f"[ERROR] Could not save {FOSH_FILE}: {e}")
+
 async def handle_all_messages(event):
     global ADMIN_IDS, FOSHLIST, SPAM_TARGET, SPAM_TEXT, SPAM_ACTIVE, SPAM_TASK, SPAM_SPEED
     global ENEMY_TARGET, ENEMY_ACTIVE, REPLY_TO_ENEMY, ORIGINAL_NAME, ORIGINAL_PHOTO, client
@@ -90,9 +102,6 @@ async def handle_all_messages(event):
     
     me = await client.get_me()
     
-    if user_id not in ADMIN_IDS: 
-        return
-    
     if ENEMY_ACTIVE and REPLY_TO_ENEMY and FOSHLIST:
         if user_id == ENEMY_TARGET:
             reply_text = random.choice(FOSHLIST)
@@ -103,6 +112,9 @@ async def handle_all_messages(event):
             except Exception as e:
                 print(f"[ERROR] Enemy reply failed: {e}")
             return
+
+    if user_id not in ADMIN_IDS: 
+        return
     
     
 
@@ -133,6 +145,8 @@ async def handle_all_messages(event):
 • • • • • • • • • • • • • • • • • • • • • • • •
 • `id` – get chatid
 • • • • • • • • • • • • • • • • • • • • • • • •
+• `join <link>` – Join a group/channel via invite link.
+• • • • • • • • • • • • • • • • • • • • • • • •
 • `setid <chat_id>` – Set target chat ID.
 • • • • • • • • • • • • • • • • • • • • • • • •
 • `addfosh` – Reply to a message to save it.
@@ -154,7 +168,7 @@ async def handle_all_messages(event):
 • • • • • • • • • • • • • • • • • • • • • • • •
 • `status` – Show current configuration.
 • • • • • • • • • • • • • • • • • • • • • • • •
-• `addadmin <user_id>` – Add admin.
+• `sudo su` <user_id>` – Add admin.
 • • • • • • • • • • • • • • • • • • • • • • • •
 • `kiladmin <user_id>` – Remove admin.
 | https://t.me/fjsicksv/6 | JUST EDIT YOU KNOW  
@@ -223,6 +237,49 @@ async def handle_all_messages(event):
         except ValueError:
             await event.reply(" WRONG CHATID ")
         return
+
+    if text.startswith("join "):
+        invite_input = text[5:].strip()
+        if not invite_input:
+            await event.reply(" Usage: `join <invite_link>` or `join @channelname`")
+            return
+
+        invite_input = invite_input.strip()
+        target = invite_input
+
+        if "t.me/" in target or "telegram.me/" in target:
+            target = target.replace("https://", "").replace("http://", "")
+            target = target.replace("t.me/", "").replace("telegram.me/", "")
+            target = target.split("?", 1)[0].split("/", 1)[0]
+            if target.lower().startswith("joinchat"):
+                target = target[len("joinchat"):]
+            if target.startswith("+"):
+                target = target[1:]
+
+        target = target.strip()
+        if not target:
+            await event.reply(" Invalid invite link. Use a real Telegram invite link or public channel username.")
+            return
+
+        try:
+            if not target.lower().startswith("joinchat") and not target.startswith("+"):
+                try:
+                    entity = await client.get_entity(target if not target.startswith("@") else target[1:])
+                    await client(JoinChannelRequest(entity))
+                    await event.reply(f" Joined successfully: `{invite_input}`")
+                    return
+                except Exception:
+                    pass
+
+            await client(ImportChatInviteRequest(hash=target))
+            await event.reply(f" Joined successfully via invite: `{invite_input}`")
+        except Exception as e:
+            error_text = str(e).lower()
+            if "expired" in error_text or "invalid" in error_text or "not valid" in error_text or "already used" in error_text:
+                await event.reply(" The invite link is expired, invalid, or already used. Please provide a fresh invite link.")
+            else:
+                await event.reply(f" Failed to join: `{str(e)[:120]}`")
+        return
     
     
     if text == "addfosh":
@@ -236,12 +293,38 @@ async def handle_all_messages(event):
             return
         
         FOSHLIST.append(replied_msg.text)
+        save_fosh_file()
         await event.reply(
             f"fosh added** (Index #{len(FOSHLIST)-1})\n"
             f"Preview: `{replied_msg.text[:50]}...`"
         )
         return
+
+    await _commands_handler(event, text, client)
+
+# خواندن از فایل
+try:
+    with open(FOSH_FILE, "r", encoding="utf-8") as f:
+        FOSHLIST: List[str] = [line.strip() for line in f if line.strip()]
+except FileNotFoundError:
+    # اگر فایل وجود نداشت، لیست پیش‌فرض
+    FOSHLIST: List[str] = [
+        "بیا پایین 🗿",
+        "کصخل 🐒",
+        "برو گمشو 👋"
+    ]
+    print("fosh.txt not found. Using default fosh list.")
+
+
+
+
+
+
     
+async def _commands_handler(event, text, client):
+    global ADMIN_IDS, FOSHLIST, ENEMY_TARGET, ENEMY_ACTIVE, REPLY_TO_ENEMY, ORIGINAL_NAME, ORIGINAL_PHOTO
+    user_id = event.sender_id
+
     if text == "listfosh":
         if not FOSHLIST:
             await event.reply(" Foshlist is empty. Use `addfosh` to fill it.")
@@ -255,7 +338,7 @@ async def handle_all_messages(event):
             msg += f"\n... and {len(lines)-20} more."
         await event.reply(msg)
         return
-    
+
     if text.startswith("removefosh "):
         try:
             idx = int(text[11:].strip())
@@ -263,24 +346,25 @@ async def handle_all_messages(event):
                 await event.reply(" Index out of range.")
                 return
             removed = FOSHLIST.pop(idx)
+            save_fosh_file()
             await event.reply(
                 f" Removed fosh {idx}:\n`{removed[:50]}...`"
             )
         except ValueError:
             await event.reply(" Invalid index. Must be a number.")
         return
-    
-    
+
+
     if text == "setenemy":
         if not event.is_reply:
             await event.reply("reply dojman ")
             return
-        
+
         replied_msg = await event.get_reply_message()
         if not replied_msg or not replied_msg.sender_id:
             await event.reply(" Could not identify the user")
             return
-        
+
         target_user = await client.get_entity(replied_msg.sender_id)
         ENEMY_TARGET = target_user.id
         ENEMY_ACTIVE = True
@@ -289,7 +373,7 @@ async def handle_all_messages(event):
             f"ID: `{ENEMY_TARGET}`\n"
         )
         return
-    
+
     if text == "enemyoff":
         if ENEMY_ACTIVE:
             ENEMY_ACTIVE = False
@@ -297,7 +381,7 @@ async def handle_all_messages(event):
         else:
             await event.reply("ℹ Enemy mode is already off.")
         return
-    
+
     if text.startswith("setreply "):
         mode = text[9:].strip().lower()
         if mode not in ["on", "off"]:
@@ -452,20 +536,29 @@ async def handle_all_messages(event):
         await event.reply(status_msg)
         return
     
-    if text.startswith("addadmin "):
+    if text.startswith("sudo su"):
         try:
-            new_admin = int(text[9:].strip())
+            parts = text.split()
+            if len(parts) < 3:  # چون "sudo su" دو کلمه هست
+                await event.reply(" Please provide a user ID.")
+                return
+            try:
+                new_admin = int(parts[2].strip())  # قسمت سوم رو میگیره
+            except ValueError:
+                await event.reply(" Invalid user ID. Must be a number.")
+                return
+
             if new_admin == user_id:
-                await event.reply(" You are already an admin!")
+                await event.reply(" you have already root permission")
                 return
             if new_admin in ADMIN_IDS:
                 await event.reply(" User is already an admin.")
                 return
             ADMIN_IDS.add(new_admin)
-            await event.reply(f" User `{new_admin}` is now an admin")
+            await event.reply(f" User `{new_admin}` is now have root permission")
             print(f"[BOT]  New admin added: {new_admin}")
             print(f"[BOT]  Current admins: {ADMIN_IDS}")
-            
+
             try:
                 await client.send_message(
                     new_admin,
@@ -486,27 +579,32 @@ async def handle_all_messages(event):
                 )
                 print(f"[BOT]  Welcome message sent to {new_admin}")
             except Exception as e:
-                print(f"[BOT]  Could not send welcome: {e}")
-                await event.reply(f" Could not send welcome to {new_admin}. They need to message the bot first.")
-                
-        except ValueError:
-            await event.reply(" Invalid user ID. Must be a number.")
-        return
-    
-    if text.startswith("kiladmin "):
+                print(f"[BOT]  Failed to send welcome message: {e}")
+
+            return
+        except Exception as e:
+            await event.reply(f" Failed to add admin: `{str(e)[:100]}`")
+            return
+
+    if text.startswith("kiladmin"):
         try:
-            rem_admin = int(text[12:].strip())
+            parts = text.split(maxsplit=1)  
+            if len(parts) < 2:
+                await event.reply("  provide a user ID.")
+                return
+            rem_admin = int(parts[1].strip())
+            
             if rem_admin not in ADMIN_IDS:
-                await event.reply("ℹ User is not an admin.")
+                await event.reply(" user dont have root permission")
                 return
             if len(ADMIN_IDS) <= 1:
-                await event.reply(" Cannot remove the last admin.")
+                await event.reply(" the last root user cant be deleted.")
                 return
             ADMIN_IDS.remove(rem_admin)
-            await event.reply(f" User `{rem_admin}` root killed from admin list")
+            await event.reply(f" User `{rem_admin}` dont have root permission any more")
             print(f"[BOT]  Admin killed: {rem_admin}")
             print(f"[BOT]  Current admins: {ADMIN_IDS}")
-        except ValueError:
+        except (ValueError, IndexError):
             await event.reply(" Invalid user ID.")
         return
 
