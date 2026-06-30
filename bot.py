@@ -94,13 +94,7 @@ async def handle_all_messages(event):
     global ADMIN_IDS, FOSHLIST, SPAM_TARGET, SPAM_TEXT, SPAM_ACTIVE, SPAM_TASK, SPAM_SPEED
     global ENEMY_TARGET, ENEMY_ACTIVE, REPLY_TO_ENEMY, ORIGINAL_NAME, ORIGINAL_PHOTO, client
     
-    if not event.message or not event.message.text:
-        return
-    
     user_id = event.sender_id
-    text = event.message.text.strip().lower() if event.message.text else ""
-    
-    me = await client.get_me()
     
     if ENEMY_ACTIVE and REPLY_TO_ENEMY and FOSHLIST:
         if user_id == ENEMY_TARGET:
@@ -112,6 +106,13 @@ async def handle_all_messages(event):
             except Exception as e:
                 print(f"[ERROR] Enemy reply failed: {e}")
             return
+    
+    if not event.message or not event.message.text:
+        return
+    
+    text = event.message.text.strip().lower() if event.message.text else ""
+    
+    me = await client.get_me()
 
     if user_id not in ADMIN_IDS: 
         return
