@@ -18,6 +18,7 @@ API_ID = 27029926
 API_HASH = "6963d3bf5f8a776f5139d71cfc707abc"
 PHONE_NUMBER = "+989213907638"
 SESSION_NAME = "user_session"
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BOT_DIR = BASE_DIR
 FOSH_FILE = os.path.join(BASE_DIR, "fosh.txt")
