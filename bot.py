@@ -11,15 +11,24 @@ from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.types import InputPhoto
+from telethon.errors import FloodWaitError
 from typing import List
 
 API_ID = 27029926
 API_HASH = "6963d3bf5f8a776f5139d71cfc707abc"
 PHONE_NUMBER = "+989213907638"
-
 SESSION_NAME = "user_session"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BOT_DIR = BASE_DIR
 FOSH_FILE = os.path.join(BASE_DIR, "fosh.txt")
+TARGET_ID_FILE = os.path.join(BOT_DIR, "targetid.txt")
+FWD_SOURCE_CHANNEL_FILE = os.path.join(BOT_DIR, "fwd_source_channel.txt")
+FWD_SOURCE_MSG_ID_FILE = os.path.join(BOT_DIR, "fwd_source_msg_id.txt")
+FWD_DELAY_MIN_FILE = os.path.join(BOT_DIR, "fwd_delay_min.txt")
+FWD_DELAY_MAX_FILE = os.path.join(BOT_DIR, "fwd_delay_max.txt")
+FWD_EXTRA_TEXT_FILE = os.path.join(BOT_DIR, "fwd_extra_text.txt")
+FWD_EXTRA_POSITION_FILE = os.path.join(BOT_DIR, "fwd_extra_position.txt")
+
 
 ADMIN_IDS: Set[int] = {7202211827}  
 FOSHLIST: List[str] = []
@@ -27,7 +36,13 @@ SPAM_TARGET: Optional[int] = None
 SPAM_TEXT: str = "ONLINE"
 SPAM_ACTIVE: bool = False
 SPAM_TASK: Optional[asyncio.Task] = None
+FORWARD_SPAM_ACTIVE: bool = False
+FORWARD_SPAM_TASK: Optional[asyncio.Task] = None
 SPAM_SPEED: float = 1.0  
+ON_OFF_ACTIVE: bool = False
+ON_OFF_TASK: Optional[asyncio.Task] = None
+ON_OFF_SEQUENCE: List[str] = ["چس", "مس", "کص","لش", "مست", "1", "2", "3", "4", "5", "6", "7", "8", "9", "00", "مدرک"]
+ON_OFF_DELAY: float = 0
 ENEMY_TARGET: Optional[int] = None
 ENEMY_ACTIVE: bool = False
 REPLY_TO_ENEMY: bool = True
@@ -50,7 +65,20 @@ async def spam_loop():
             print(f"[SPAM] 📨 Sent to {SPAM_TARGET} | Speed: {SPAM_SPEED}s")
         except Exception as e:
             print(f"[ERROR] Spam failed: {e}")
-        await asyncio.sleep(SPAM_SPEED)  
+        await asyncio.sleep(SPAM_SPEED)
+
+async def on_off_loop(chat_id: int):
+    global ON_OFF_ACTIVE, ON_OFF_SEQUENCE, ON_OFF_DELAY, client
+    while ON_OFF_ACTIVE and client:
+        for item in ON_OFF_SEQUENCE:
+            if not ON_OFF_ACTIVE:
+                break
+            try:
+                await client.send_message(chat_id, item)
+            except Exception as e:
+                print(f"[ERROR] on/off send failed: {e}")
+            await asyncio.sleep(ON_OFF_DELAY)
+        await asyncio.sleep(0)
 
 async def send_loading_animation(event):
     """Send a loading animation with progress bar effect."""
@@ -90,9 +118,106 @@ def save_fosh_file():
     except Exception as e:
         print(f"[ERROR] Could not save {FOSH_FILE}: {e}")
 
+
+def ensure_forward_files():
+    os.makedirs(BOT_DIR, exist_ok=True)
+    files_defaults = {
+        TARGET_ID_FILE: "1",
+        FWD_SOURCE_CHANNEL_FILE: "",
+        FWD_SOURCE_MSG_ID_FILE: "0",
+        FWD_DELAY_MIN_FILE: "3",
+        FWD_DELAY_MAX_FILE: "10",
+        FWD_EXTRA_TEXT_FILE: "",
+        FWD_EXTRA_POSITION_FILE: "after",
+    }
+    for path, value in files_defaults.items():
+        if not os.path.exists(path):
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(value)
+            except Exception as e:
+                print(f"[ERROR] Could not create {path}: {e}")
+
+
+def read_forward_file(path: str, default: str = "") -> str:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read().strip() or default
+    except Exception:
+        return default
+
+
+async def check_owner(event) -> bool:
+    if event.sender_id not in ADMIN_IDS:
+        try:
+            await event.reply("Access denied.")
+        except Exception:
+            pass
+        return False
+    return True
+
+
+async def forward_spam_function():
+    global FORWARD_SPAM_ACTIVE, client
+    print("Forward spam thread started")
+    ensure_forward_files()
+    while FORWARD_SPAM_ACTIVE and client:
+        try:
+            target_id = SPAM_TARGET
+            if not target_id:
+                target_id = int(read_forward_file(TARGET_ID_FILE, "1") or "1")
+
+            source_channel = read_forward_file(FWD_SOURCE_CHANNEL_FILE)
+            source_msg_id = int(read_forward_file(FWD_SOURCE_MSG_ID_FILE, "0"))
+            delay_min = float(read_forward_file(FWD_DELAY_MIN_FILE, "3"))
+            delay_max = float(read_forward_file(FWD_DELAY_MAX_FILE, "10"))
+            extra_text = read_forward_file(FWD_EXTRA_TEXT_FILE)
+            extra_pos = read_forward_file(FWD_EXTRA_POSITION_FILE, "after").lower()
+        except Exception as e:
+            print(f"Config read error: {e}")
+            await asyncio.sleep(5)
+            continue
+
+        if not target_id or target_id == 1:
+            print(" No target set. Use setid <chatid> first.")
+            FORWARD_SPAM_ACTIVE = False
+            break
+
+        if not source_channel or source_msg_id == 0:
+            print(" No source set. Use setfwd <message_link>")
+            FORWARD_SPAM_ACTIVE = False
+            break
+
+        try:
+            source_message = await client.get_messages(source_channel, ids=source_msg_id)
+            if not source_message:
+                print(f"❌ Message {source_msg_id} not found in {source_channel}")
+                FORWARD_SPAM_ACTIVE = False
+                break
+
+            await client.forward_messages(target_id, source_message)
+
+            if extra_text:
+                if extra_pos == "before":
+                    await client.send_message(target_id, f"{extra_text}\n\n")
+                else:
+                    await client.send_message(target_id, f"\n\n{extra_text}")
+
+            print(f" Forwarded to {target_id}")
+            delay = random.uniform(delay_min, delay_max)
+            await asyncio.sleep(delay)
+
+        except FloodWaitError as e:
+            print(f" Flood wait: {e.seconds}s")
+            await asyncio.sleep(e.seconds)
+        except Exception as e:
+            print(f"Forward error: {e}")
+            await asyncio.sleep(5)
+
+
 async def handle_all_messages(event):
     global ADMIN_IDS, FOSHLIST, SPAM_TARGET, SPAM_TEXT, SPAM_ACTIVE, SPAM_TASK, SPAM_SPEED
-    global ENEMY_TARGET, ENEMY_ACTIVE, REPLY_TO_ENEMY, ORIGINAL_NAME, ORIGINAL_PHOTO, client
+    global ON_OFF_ACTIVE, ON_OFF_TASK, ENEMY_TARGET, ENEMY_ACTIVE, REPLY_TO_ENEMY, ORIGINAL_NAME, ORIGINAL_PHOTO, FORWARD_SPAM_ACTIVE, FORWARD_SPAM_TASK, client
     
     user_id = event.sender_id
     
@@ -150,6 +275,14 @@ async def handle_all_messages(event):
 • • • • • • • • • • • • • • • • • • • • • • • •
 • `setid <chat_id>` – Set target chat ID.
 • • • • • • • • • • • • • • • • • • • • • • • •
+• `setfwd <link>` – Set forward source message.
+• • • • • • • • • • • • • • • • • • • • • • • •
+• `fspam_on` – Start forward spam.
+• • • • • • • • • • • • • • • • • • • • • • • •
+• `fspam_off` – Stop forward spam.
+• • • • • • • • • • • • • • • • • • • • • • • •
+• `showfwd` – Show forward config.
+• • • • • • • • • • • • • • • • • • • • • • • •
 • `addfosh` – Reply to a message to save it.
 • • • • • • • • • • • • • • • • • • • • • • • •
 • `listfosh` – Show all saved fosh items.
@@ -160,7 +293,8 @@ async def handle_all_messages(event):
 • • • • • • • • • • • • • • • • • • • • • • • •
 • `enemyoff` – Disable enemy mode.
 • • • • • • • • • • • • • • • • • • • • • • • •
-
+•ON/OFF  you can use it in number fight
+• • • • • • • • • • • • • • • • • • • • • • • •
 • `clone @username` – Clone target's profile pic + name.
 • • • • • • • • • • • • • • • • • • • • • • • •
 • `cloneback` – Restore your original profile
@@ -178,6 +312,21 @@ async def handle_all_messages(event):
         return
     
     
+    if text == "on":
+        if not ON_OFF_ACTIVE:
+            ON_OFF_ACTIVE = True
+            if ON_OFF_TASK and not ON_OFF_TASK.done():
+                ON_OFF_TASK.cancel()
+            ON_OFF_TASK = asyncio.create_task(on_off_loop(event.chat_id))
+        return
+
+    if text == "off":
+        if ON_OFF_ACTIVE:
+            ON_OFF_ACTIVE = False
+            if ON_OFF_TASK and not ON_OFF_TASK.done():
+                ON_OFF_TASK.cancel()
+        return
+
     if text.startswith("speed "):
         try:
             new_speed = float(text[6:].strip())
@@ -190,6 +339,7 @@ async def handle_all_messages(event):
     
     
     if text == "spam":
+
         if not SPAM_TARGET:
             await event.reply(" No target chat set. Use `setid` first.")
             return
@@ -235,8 +385,105 @@ async def handle_all_messages(event):
         try:
             SPAM_TARGET = int(text[6:].strip())
             await event.reply(f"TG SET `{SPAM_TARGET}`")
+            try:
+                with open(TARGET_ID_FILE, "w", encoding="utf-8") as f:
+                    f.write(str(SPAM_TARGET))
+            except Exception as e:
+                print(f"[ERROR] Could not save target ID file: {e}")
         except ValueError:
             await event.reply(" WRONG CHATID ")
+        return
+
+    if text.startswith("setfwd "):
+        link = text[7:].strip()
+        if not link:
+            await event.reply("Usage: `setfwd <message_link>`")
+            return
+        try:
+            cleaned = link.replace("https://", "").replace("http://", "").replace("t.me/", "").replace("telegram.me/", "")
+            parts = cleaned.split("/")
+            if len(parts) >= 3 and parts[0].lower() == "c":
+                channel = str(int("-100" + parts[1]))
+                msg_id = int(parts[2])
+            elif len(parts) >= 2:
+                channel = parts[0]
+                msg_id = int(parts[1])
+            else:
+                await event.reply(" Invalid setfwd link. Use a t.me link with message ID.")
+                return
+            with open(FWD_SOURCE_CHANNEL_FILE, "w", encoding="utf-8") as f:
+                f.write(channel)
+            with open(FWD_SOURCE_MSG_ID_FILE, "w", encoding="utf-8") as f:
+                f.write(str(msg_id))
+            await event.reply(f" Source set!\nChannel: `{channel}`\nMessage ID: `{msg_id}`")
+        except Exception as e:
+            await event.reply(f" Failed to parse link: {e}")
+        return
+
+    if text.startswith("setfwd_delay "):
+        try:
+            parts = text.split()
+            min_d = float(parts[1])
+            max_d = float(parts[2]) if len(parts) > 2 else min_d + 1
+            if min_d < 0.5:
+                min_d = 0.5
+            if max_d < min_d:
+                max_d = min_d + 1
+            with open(FWD_DELAY_MIN_FILE, "w", encoding="utf-8") as f:
+                f.write(str(min_d))
+            with open(FWD_DELAY_MAX_FILE, "w", encoding="utf-8") as f:
+                f.write(str(max_d))
+            await event.reply(f" Delay: {min_d}-{max_d} seconds")
+        except Exception:
+            await event.reply(" Usage: `setfwd_delay <min> <max>`")
+        return
+
+    if text.startswith("setfwd_text "):
+        extra_text = text[12:].strip()
+        with open(FWD_EXTRA_TEXT_FILE, "w", encoding="utf-8") as f:
+            f.write(extra_text)
+        await event.reply(" Extra text set")
+        return
+
+    if text.startswith("setfwd_pos "):
+        pos = text[11:].strip().lower()
+        if pos not in ["before", "after"]:
+            await event.reply(" Usage: `setfwd_pos before` or `setfwd_pos after`")
+            return
+        with open(FWD_EXTRA_POSITION_FILE, "w", encoding="utf-8") as f:
+            f.write(pos)
+        await event.reply(f" Position: {pos}")
+        return
+
+    if text == "fspam_on":
+        if FORWARD_SPAM_ACTIVE:
+            await event.reply(" Forward spam is already running.")
+            return
+        FORWARD_SPAM_ACTIVE = True
+        if FORWARD_SPAM_TASK and not FORWARD_SPAM_TASK.done():
+            FORWARD_SPAM_TASK.cancel()
+        FORWARD_SPAM_TASK = asyncio.create_task(forward_spam_function())
+        await event.reply(" **FWD SPAM RUNNING**")
+        return
+
+    if text == "fspam_off":
+        if FORWARD_SPAM_ACTIVE:
+            FORWARD_SPAM_ACTIVE = False
+            if FORWARD_SPAM_TASK and not FORWARD_SPAM_TASK.done():
+                FORWARD_SPAM_TASK.cancel()
+            await event.reply(" **FWD SPAM STOPPED**")
+        else:
+            await event.reply(" Forward spam is not running.")
+        return
+
+    if text == "showfwd":
+        source = read_forward_file(FWD_SOURCE_CHANNEL_FILE)
+        msg_id = read_forward_file(FWD_SOURCE_MSG_ID_FILE, "0")
+        min_delay = read_forward_file(FWD_DELAY_MIN_FILE, "3")
+        max_delay = read_forward_file(FWD_DELAY_MAX_FILE, "10")
+        target = SPAM_TARGET or int(read_forward_file(TARGET_ID_FILE, "1") or "1")
+        status = "RUNNING" if FORWARD_SPAM_ACTIVE else "STOPPED"
+        await event.reply(f"**Forward Config - {status}**\n• TARGET: `{target}`\n• SOURCE: `{source}/{msg_id}`\n• DELAY: `{min_delay}-{max_delay}` seconds")
         return
 
     if text.startswith("join "):
@@ -623,6 +870,7 @@ async def main():
     print(f"[BOT] ⏱️ Default spam speed: {SPAM_SPEED}s")
     print("=" * 60)
     
+    ensure_forward_files()
     client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
     await client.start(phone=PHONE_NUMBER)
     
