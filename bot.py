@@ -306,7 +306,7 @@ async def handle_all_messages(event):
 • `sudo su` <user_id>` – Add admin.
 • • • • • • • • • • • • • • • • • • • • • • • •
 • `kiladmin <user_id>` – Remove admin.
-| https://t.me/fjsicksv/6 | JUST EDIT YOU KNOW  
+| https://t.me/fjsicksv/10 | JUST EDIT YOU KNOW  
 """
         await event.reply(help_text)
         return
