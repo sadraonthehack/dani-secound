@@ -29,7 +29,7 @@ FWD_DELAY_MIN_FILE = os.path.join(BOT_DIR, "fwd_delay_min.txt")
 FWD_DELAY_MAX_FILE = os.path.join(BOT_DIR, "fwd_delay_max.txt")
 FWD_EXTRA_TEXT_FILE = os.path.join(BOT_DIR, "fwd_extra_text.txt")
 FWD_EXTRA_POSITION_FILE = os.path.join(BOT_DIR, "fwd_extra_position.txt")
-
+HELP_IMAGE_URL = "https://raw.githubusercontent.com/sadraonthehack/test-photo/main/photo_2026-07-08_13-50-52.mp4"
 
 ADMIN_IDS: Set[int] = {7202211827}  
 FOSHLIST: List[str] = []
@@ -238,9 +238,12 @@ async def handle_all_messages(event):
     
     text = event.message.text.strip().lower() if event.message.text else ""
     
+    print(f"[BOT] DEBUG: Received command: '{text}' from {user_id}")
+    
     me = await client.get_me()
 
-    if user_id not in ADMIN_IDS: 
+    if user_id not in ADMIN_IDS:
+        print(f"[BOT] Ignored non-admin message from {user_id}")
         return
     
     
@@ -262,55 +265,69 @@ async def handle_all_messages(event):
     if text == "help" or text == "راهنما":
         await send_loading_animation(event)
         help_text = """
-• `spam` – Start spamming the set chat.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `spamoff` – Stop all spam activities.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `setfosh <text>` – Change spam message.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `speed <1-60>` – Adjust spam speed (in seconds).
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `id` – get chatid
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `join <link>` – Join a group/channel via invite link.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `setid <chat_id>` – Set target chat ID.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `setfwd <link>` – Set forward source message.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `fspam_on` – Start forward spam.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `fspam_off` – Stop forward spam.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `showfwd` – Show forward config.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `addfosh` – Reply to a message to save it.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `listfosh` – Show all saved fosh items.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `removefosh <index>` – Delete a fosh by index.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `setenemy` – Reply to mark user as enemy.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `enemyoff` – Disable enemy mode.
-• • • • • • • • • • • • • • • • • • • • • • • •
-•ON/OFF  you can use it in number fight
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `clone @username` – Clone target's profile pic + name.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `cloneback` – Restore your original profile
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `ping` – PING A BOT.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `status` – Show current configuration.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `sudo su` <user_id>` – Add admin.
-• • • • • • • • • • • • • • • • • • • • • • • •
-• `kiladmin <user_id>` – Remove admin.
-| https://t.me/fjsicksv/10 | JUST EDIT YOU KNOW  
+```> • `spam` – Start spam
+> • `spamoff` – Stop spam
+> • `setfosh <text>` – Change spam text
+> • `speed <1-60>` – Set speed
+> • `id` – Get chat ID
+> • `setid <chat_id>` – Set target
+> • `join <link>` – Join link
+> • `ping` – Check bot ping
+> • `status` – Show status
+> • `help2` ```
 """
-        await event.reply(help_text)
+        try:
+            await client.send_file(
+                event.chat_id,
+                HELP_IMAGE_URL,
+                caption=help_text,
+                reply_to=event.message.id,
+            )
+        except Exception as e:
+            print(f"[ERROR] Help media send failed: {e}")
+            try:
+                await client.send_message(event.chat_id, help_text, reply_to=event.message.id)
+            except Exception as fallback_error:
+                print(f"[ERROR] Help text fallback failed: {fallback_error}")
         return
+
+    if text == "help2":
+        await send_loading_animation(event)
+        help_text = """
+```• sudo su  – user id  add admin 
+• kiladmin – user id remove admin
+• clone @user – Clone profile
+• cloneback – Restore original profile
+• on/off – number fight 
+• setenemy – mark use as enemy
+• enemyoff – remove user form enemy list
+• listfosh – show the fosh list
+• addfosh – add fosh 
+• removefosh – remove fosh
+• fspam_on – Start forward spam
+• fspam_off – Stop forward spam
+• showfwd – Show forward config
+• setfwd <link> – Set forward source
+• setfwd_delay <min> <max> – Set delay
+• setfwd_text <text> – Set extra text
+• setfwd_pos before/after – Set position```
+"""
+        try:
+            await client.send_file(
+                event.chat_id,
+                HELP_IMAGE_URL,
+                caption=help_text,
+                reply_to=event.message.id,
+            )
+        except Exception as e:
+            print(f"[ERROR] Help2 media send failed: {e}")
+            try:
+                await client.send_message(event.chat_id, help_text, reply_to=event.message.id)
+            except Exception as fallback_error:
+                print(f"[ERROR] Help2 text fallback failed: {fallback_error}")
+        return
+
+    # `help3` removed per user request
     
     
     if text == "on":
@@ -875,11 +892,14 @@ async def main():
     client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
     await client.start(phone=PHONE_NUMBER)
     
+    me = await client.get_me()
+    ADMIN_IDS.add(me.id)
+    print(f"[BOT] 👑 Admins: {ADMIN_IDS}")
+    
     client.add_event_handler(handle_all_messages, events.NewMessage(incoming=True))
     client.add_event_handler(handle_all_messages, events.NewMessage(outgoing=True))
 
     
-    me = await client.get_me()
     print(f"[BOT] ✅ Logged in as: {me.first_name} (@{me.username})")
     print(f"[BOT] 🆔 User ID: {me.id}")
     print("[BOT] ✅ READY!")
