@@ -29,7 +29,7 @@ FWD_DELAY_MIN_FILE = os.path.join(BOT_DIR, "fwd_delay_min.txt")
 FWD_DELAY_MAX_FILE = os.path.join(BOT_DIR, "fwd_delay_max.txt")
 FWD_EXTRA_TEXT_FILE = os.path.join(BOT_DIR, "fwd_extra_text.txt")
 FWD_EXTRA_POSITION_FILE = os.path.join(BOT_DIR, "fwd_extra_position.txt")
-HELP_IMAGE_URL = "https://raw.githubusercontent.com/sadraonthehack/test-photo/main/photo_2026-07-08_13-50-52.mp4"
+HELP_IMAGE_URL = "https://raw.githubusercontent.com/sadraonthehack/VDIEO/main/doc_2026-07-19_19-43-39.mp4"
 
 ADMIN_IDS: Set[int] = {7202211827}  
 FOSHLIST: List[str] = []
